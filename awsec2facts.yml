@@ -1,0 +1,46 @@
+--- # Gather ec2 facts from this instance
+
+- hosts: aws
+  remote_user: ec2-user
+  become: yes
+  gather_facts: true
+  connection: ssh
+  tasks:
+  - name: gather fact about running ec2 instance
+    action: ec2_facts
+  - name: Print the information received
+    debug: msg= "instance type {{ansible_ec2_instance_type}}"
+    when: (ansible_ec2_instance_type  == 't2.nano') or (ansible_ec2_instance_type == 't2.micro')
+
+- hosts: control
+  remote_user: test
+  connection: ssh
+  gather_facts: true
+  tasks:
+  - name: Gather private IP address 
+    shell: /home/test/.local/bin/aws ec2 describe-instances 
+    register: result
+
+  - set_fact:
+      myvar="{{(result.stdout | from_json).Reservations}}"
+
+  - debug: var=myvar
+  
+  - name: Loop over myvar and get the ip address
+    add_host:
+      name: "{{item.Instances[0].PublicIpAddress}}"
+      groups: ec2_instances
+    with_items: "{{myvar}}"
+
+- hosts: ec2_instances
+  remote_user: ec2-user
+  become: yes
+  gather_facts: true
+  connection: ssh
+  tasks:
+  - name: Logging into every server and see if ssh connectivity is there
+    shell: "whoami"
+    register: output
+
+  - debug: var=output
+
